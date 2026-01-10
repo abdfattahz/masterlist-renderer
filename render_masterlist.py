@@ -1,5 +1,9 @@
 import pandas as pd
 
 path = 'masterlist.xlsx'
-xl = pd.ExcelFile(path)
-print(xl.sheet_names)
+sheet = 'A'
+
+df = pd.read_excel(path, sheet_name=sheet)
+
+print(df.columns.tolist())
+print(df.head())
