@@ -24,3 +24,18 @@ def load_rows_from_sheet(path, sheet_name):
     
     # we do this so that each elaned rows will be output as tuples `('COMPANY NAME', 'COMPANY NO.')`
     return list(df.itertuples(index=False, name=None))
+
+path = 'masterlist.xlsx'
+
+all_rows = []
+
+sheets = get_sheet_names(path)
+for sheet in sheets:
+    rows = load_rows_from_sheet(path, sheet)
+    # we use extend instead of append to make sure it keeps a flat list instead of nested list
+    all_rows.extend(rows)
+
+print('Total rows: ', len(all_rows))
+# `list[start:stop]`
+print('First 5 rows: ', all_rows[:5])
+print('Last 5 rows: ', all_rows[-5:])
