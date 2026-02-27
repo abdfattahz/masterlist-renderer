@@ -1,5 +1,6 @@
 import os
 import math
+import platform
 import argparse
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont, ImageStat
@@ -10,8 +11,9 @@ def get_sheet_names(path: str):
     return xl.sheet_names
 
 
-def load_rows_from_sheet(path: str, sheet_name: str,
-                         company_col="COMPANY NAME", brn_col="COMPANY NO."):
+def load_rows_from_sheet(
+    path: str, sheet_name: str, company_col="COMPANY NAME", brn_col="COMPANY NO."
+):
     df = pd.read_excel(path, sheet_name=sheet_name)
     df.columns = [c.strip() for c in df.columns]
 
@@ -29,21 +31,48 @@ def load_rows_from_sheet(path: str, sheet_name: str,
     return rows
 
 
-def pick_default_font_linux() -> str:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-    ]
+def pick_default_font() -> str:
+    system = platform.system()
+
+    if system == "Windows":
+        win_dir = os.environ.get("WINDIR", r"C:\\Windows")
+        candidates = [
+            os.path.join(win_dir, "Fonts", "arial.ttf"),
+            os.path.join(win_dir, "Fonts", "segoeui.ttf"),
+            os.path.join(win_dir, "Fonts", "calibri.ttf"),
+        ]
+    elif system == "Darwin":
+        candidates = [
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/System/Library/Fonts/Supplemental/Helvetica.ttf",
+            "/Library/Fonts/Arial.ttf",
+        ]
+    else:
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
+
     for c in candidates:
         if os.path.exists(c):
             return c
+
     raise RuntimeError("No usable TTF font found. Pass --font /path/to/font.ttf")
 
 
-def wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont,
-               max_width: int, max_lines: int):
+def pick_default_font_linux() -> str:
+    return pick_default_font()
+
+
+def wrap_lines(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    max_width: int,
+    max_lines: int,
+):
     """
     Wrap text into up to max_lines without changing font size.
     If too long, truncate last line with ellipsis.
@@ -93,8 +122,9 @@ def _relative_luminance(color) -> float:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
-def derive_table_palette_from_background(bg_image: Image.Image, cell_alpha: int,
-                                         header_alpha: int = 235):
+def derive_table_palette_from_background(
+    bg_image: Image.Image, cell_alpha: int, header_alpha: int = 235
+):
     rgb_img = bg_image.convert("RGB")
     stat = ImageStat.Stat(rgb_img)
     avg = tuple(_clamp_color(c) for c in stat.mean)
@@ -128,8 +158,8 @@ def render_streamed_pages(
     out_dir: str,
     width: int = 1920,
     height: int = 1080,
-    font_path: str = None,
-    background_path: str = None,
+    font_path: str | None = None,
+    background_path: str | None = None,
     pairs_per_row: int = 3,
     rows_per_page: int = 18,
     margin: int = 0,
@@ -145,6 +175,7 @@ def render_streamed_pages(
     match_table_to_bg: bool = False,
     allow_auto_body_text: bool = True,
     allow_auto_header_text: bool = True,
+    progress_callback=None,
 ):
     """
     Renders pages from a *single continuous stream* of rows.
@@ -153,7 +184,7 @@ def render_streamed_pages(
     os.makedirs(out_dir, exist_ok=True)
 
     if font_path is None:
-        font_path = pick_default_font_linux()
+        font_path = pick_default_font()
 
     header_font = ImageFont.truetype(font_path, header_font_size)
     company_font = ImageFont.truetype(font_path, body_font_size)
@@ -245,7 +276,9 @@ def render_streamed_pages(
         for p in range(pairs_per_row):
             for is_brn, label in [(False, "COMPANY NAME"), (True, "BRN NO")]:
                 x0, y0, x1, y1 = header_rect(p, is_brn)
-                odraw.rectangle([x0, y0, x1, y1], fill=header_bg, outline=border, width=border_width)
+                odraw.rectangle(
+                    [x0, y0, x1, y1], fill=header_bg, outline=border, width=border_width
+                )
 
         # Pull exactly per_page rows from the stream (or less on last page)
         page_rows = []
@@ -264,8 +297,12 @@ def render_streamed_pages(
             x0, y0, x1, y1 = cell_rect(pair_i, row_i, is_brn=False)
             xb0, yb0, xb1, yb1 = cell_rect(pair_i, row_i, is_brn=True)
 
-            odraw.rectangle([x0, y0, x1, y1], fill=bg, outline=border, width=border_width)
-            odraw.rectangle([xb0, yb0, xb1, yb1], fill=bg, outline=border, width=border_width)
+            odraw.rectangle(
+                [x0, y0, x1, y1], fill=bg, outline=border, width=border_width
+            )
+            odraw.rectangle(
+                [xb0, yb0, xb1, yb1], fill=bg, outline=border, width=border_width
+            )
 
         img = Image.alpha_composite(img, overlay)
         draw = ImageDraw.Draw(img)
@@ -280,7 +317,7 @@ def render_streamed_pages(
                     (x0 + (x1 - x0 - tw) / 2, y0 + (y1 - y0 - th) / 2),
                     label,
                     font=header_font,
-                    fill=header_text
+                    fill=header_text,
                 )
 
         # Body text (solid)
@@ -292,7 +329,9 @@ def render_streamed_pages(
             x0, y0, x1, y1 = cell_rect(pair_i, row_i, is_brn=False)
             xb0, yb0, xb1, yb1 = cell_rect(pair_i, row_i, is_brn=True)
 
-            company_lines = wrap_lines(draw, company, company_font, (x1 - x0 - 2 * pad), 2)
+            company_lines = wrap_lines(
+                draw, company, company_font, (x1 - x0 - 2 * pad), 2
+            )
             brn_lines = wrap_lines(draw, brn, brn_font, (xb1 - xb0 - 2 * pad), 1)
             brn_line = brn_lines[0] if brn_lines else brn
 
@@ -303,10 +342,7 @@ def render_streamed_pages(
             for line in company_lines:
                 tw = draw.textlength(line, font=company_font)
                 draw.text(
-                    (x0 + (x1 - x0 - tw) / 2, cy),
-                    line,
-                    font=company_font,
-                    fill=text
+                    (x0 + (x1 - x0 - tw) / 2, cy), line, font=company_font, fill=text
                 )
                 cy += company_font.size + line_gap
 
@@ -316,7 +352,7 @@ def render_streamed_pages(
                 (xb0 + (xb1 - xb0 - tw) / 2, yb0 + ((yb1 - yb0) - brn_font.size) / 2),
                 brn_line,
                 font=brn_font,
-                fill=text
+                fill=text,
             )
 
         out_path = os.path.join(out_dir, f"masterlist_{page:02d}.png")
@@ -325,16 +361,97 @@ def render_streamed_pages(
 
         rotated.convert("RGB").save(out_path, "PNG", optimize=True)
 
+        if callable(progress_callback):
+            progress_callback(page, total_pages)
+
     return total_pages
+
 
 def parse_rgb(value: str):
     try:
-        r, g, b = map(int, value.split(","))
+        parts = [p.strip() for p in value.split(",")]
+        if len(parts) != 3:
+            raise ValueError
+
+        r, g, b = map(int, parts)
+        if any(c < 0 or c > 255 for c in (r, g, b)):
+            raise ValueError
+
         return (r, g, b)
     except Exception:
         raise argparse.ArgumentTypeError(
             "Color must be in format R,G,B (e.g. 255,255,255)"
         )
+
+
+def load_all_rows(path: str):
+    sheet_names = get_sheet_names(path)
+    all_rows = []
+
+    for sheet in sheet_names:
+        all_rows.extend(load_rows_from_sheet(path, sheet_name=sheet))
+
+    return all_rows
+
+
+def run_render_process(
+    excel_path: str,
+    out_dir: str = "output",
+    bg_path: str | None = None,
+    font_path: str | None = None,
+    pairs: int = 3,
+    rows: int = 18,
+    alpha: int = 175,
+    font_size: int = 14,
+    header_font_size: int = 18,
+    text_color: str = "20,0,0",
+    header_text_color: str = "255,255,255",
+    match_table_to_bg: bool = False,
+    progress_callback=None,
+):
+    default_text_color = "20,0,0"
+    default_header_text_color = "255,255,255"
+
+    all_rows = load_all_rows(excel_path)
+    total_rows = len(all_rows)
+
+    body_text_color = parse_rgb(text_color)
+    header_text_color_value = parse_rgb(header_text_color)
+    text_color_overridden = text_color != default_text_color
+    header_text_color_overridden = header_text_color != default_header_text_color
+
+    def row_generator():
+        for row in all_rows:
+            yield row
+
+    pages = render_streamed_pages(
+        rows_stream=row_generator(),
+        total_rows=total_rows,
+        out_dir=out_dir,
+        width=1080,
+        height=1920,
+        font_path=font_path,
+        background_path=bg_path,
+        pairs_per_row=pairs,
+        rows_per_page=rows,
+        margin=0,
+        gutter=0,
+        header_h=70,
+        name_ratio=0.72,
+        cell_alpha=alpha,
+        border_width=1,
+        body_font_size=font_size,
+        header_font_size=header_font_size,
+        body_text_color=body_text_color,
+        header_text_color=header_text_color_value,
+        match_table_to_bg=match_table_to_bg,
+        allow_auto_body_text=not text_color_overridden,
+        allow_auto_header_text=not header_text_color_overridden,
+        progress_callback=progress_callback,
+    )
+
+    return pages, total_rows
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -342,61 +459,43 @@ def main():
     ap.add_argument("--out", default="output", help="Output folder for PNGs")
     ap.add_argument("--bg", default=None, help="Optional background image")
     ap.add_argument("--font", default=None, help="Optional TTF font path")
-    ap.add_argument("--pairs", type=int, default=3, help="How many (Name+BRN) pairs across")
+    ap.add_argument(
+        "--pairs", type=int, default=3, help="How many (Name+BRN) pairs across"
+    )
     ap.add_argument("--rows", type=int, default=18, help="Rows per page")
     ap.add_argument("--alpha", type=int, default=175, help="Cell opacity 0-255")
     ap.add_argument("--font_size", type=int, default=14, help="Body font size (fixed)")
     ap.add_argument("--header_font_size", type=int, default=18, help="Header font size")
-    ap.add_argument("--text_color", default="20,0,0",help="Body text RGB, e.g. 0,0,0 or 255,255,255")
-    ap.add_argument("--header_text_color", default="255,255,255",help="Header text RGB, e.g. 255,255,255")
-    ap.add_argument("--match_table_to_bg", action="store_true",
-        help="Automatically derive table and text colors from the background image")
+    ap.add_argument(
+        "--text_color",
+        default="20,0,0",
+        help="Body text RGB, e.g. 0,0,0 or 255,255,255",
+    )
+    ap.add_argument(
+        "--header_text_color",
+        default="255,255,255",
+        help="Header text RGB, e.g. 255,255,255",
+    )
+    ap.add_argument(
+        "--match_table_to_bg",
+        action="store_true",
+        help="Automatically derive table and text colors from the background image",
+    )
     args = ap.parse_args()
 
-    default_text_color = ap.get_default("text_color")
-    default_header_text_color = ap.get_default("header_text_color")
-
-    sheet_names = get_sheet_names(args.excel)
-
-    # Create a continuous generator of rows across all sheets in order
-    all_rows = []
-    for sheet in sheet_names:
-        all_rows.extend(load_rows_from_sheet(args.excel, sheet_name=sheet))
-
-    total_rows = len(all_rows)
-
-    body_text_color = parse_rgb(args.text_color)
-    header_text_color = parse_rgb(args.header_text_color)
-    text_color_overridden = args.text_color != default_text_color
-    header_text_color_overridden = args.header_text_color != default_header_text_color
-
-    def row_generator():
-        for r in all_rows:
-            yield r
-            
-    pages = render_streamed_pages(
-        rows_stream=row_generator(),
-        total_rows=total_rows,
+    pages, _ = run_render_process(
+        excel_path=args.excel,
         out_dir=args.out,
-        width=1080,
-        height=1920,
+        bg_path=args.bg,
         font_path=args.font,
-        background_path=args.bg,
-        pairs_per_row=args.pairs,
-        rows_per_page=args.rows,
-        margin=0,
-        gutter=0,
-        header_h=70,
-        name_ratio=0.72,
-        cell_alpha=args.alpha,
-        border_width=1,
-        body_font_size=args.font_size,
+        pairs=args.pairs,
+        rows=args.rows,
+        alpha=args.alpha,
+        font_size=args.font_size,
         header_font_size=args.header_font_size,
-        body_text_color=body_text_color,
-        header_text_color=header_text_color,
+        text_color=args.text_color,
+        header_text_color=args.header_text_color,
         match_table_to_bg=args.match_table_to_bg,
-        allow_auto_body_text=not text_color_overridden,
-        allow_auto_header_text=not header_text_color_overridden,
     )
 
     print(f"Done. Generated {pages} page(s) into: {args.out}")
