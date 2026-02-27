@@ -172,6 +172,10 @@ def render_streamed_pages(
     header_font_size: int = 18,
     body_text_color=(20, 0, 0),
     header_text_color=(255, 255, 255),
+    row_a_color: tuple[int, int, int] | None = None,
+    row_b_color: tuple[int, int, int] | None = None,
+    header_bg_color: tuple[int, int, int] | None = None,
+    border_color: tuple[int, int, int] | None = None,
     match_table_to_bg: bool = False,
     allow_auto_body_text: bool = True,
     allow_auto_header_text: bool = True,
@@ -222,11 +226,16 @@ def render_streamed_pages(
     total_pages = math.ceil(total_rows / per_page)
 
     # Colors
+    base_row_a = row_a_color or (243, 166, 166)
+    base_row_b = row_b_color or (232, 126, 126)
+    base_header_bg = header_bg_color or (180, 40, 40)
+    base_border = border_color or (20, 0, 0)
+
     palette = {
-        "row_a": (243, 166, 166, cell_alpha),
-        "row_b": (232, 126, 126, cell_alpha),
-        "header_bg": (180, 40, 40, 235),
-        "border": (20, 0, 0, 255),
+        "row_a": (*base_row_a, cell_alpha),
+        "row_b": (*base_row_b, cell_alpha),
+        "header_bg": (*base_header_bg, 235),
+        "border": (*base_border, 255),
         "body_text": body_text_color,
         "header_text": header_text_color,
     }
@@ -241,6 +250,15 @@ def render_streamed_pages(
             palette["body_text"] = auto_palette["body_text"]
         if allow_auto_header_text:
             palette["header_text"] = auto_palette["header_text"]
+
+    if row_a_color is not None:
+        palette["row_a"] = (*row_a_color, cell_alpha)
+    if row_b_color is not None:
+        palette["row_b"] = (*row_b_color, cell_alpha)
+    if header_bg_color is not None:
+        palette["header_bg"] = (*header_bg_color, 235)
+    if border_color is not None:
+        palette["border"] = (*border_color, 255)
 
     row_a = palette["row_a"]
     row_b = palette["row_b"]
@@ -406,6 +424,10 @@ def run_render_process(
     header_font_size: int = 18,
     text_color: str = "20,0,0",
     header_text_color: str = "255,255,255",
+    row_a_color: str | None = None,
+    row_b_color: str | None = None,
+    header_bg_color: str | None = None,
+    border_color: str | None = None,
     match_table_to_bg: bool = False,
     progress_callback=None,
 ):
@@ -417,6 +439,10 @@ def run_render_process(
 
     body_text_color = parse_rgb(text_color)
     header_text_color_value = parse_rgb(header_text_color)
+    row_a_color_value = parse_rgb(row_a_color) if row_a_color else None
+    row_b_color_value = parse_rgb(row_b_color) if row_b_color else None
+    header_bg_color_value = parse_rgb(header_bg_color) if header_bg_color else None
+    border_color_value = parse_rgb(border_color) if border_color else None
     text_color_overridden = text_color != default_text_color
     header_text_color_overridden = header_text_color != default_header_text_color
 
@@ -444,6 +470,10 @@ def run_render_process(
         header_font_size=header_font_size,
         body_text_color=body_text_color,
         header_text_color=header_text_color_value,
+        row_a_color=row_a_color_value,
+        row_b_color=row_b_color_value,
+        header_bg_color=header_bg_color_value,
+        border_color=border_color_value,
         match_table_to_bg=match_table_to_bg,
         allow_auto_body_text=not text_color_overridden,
         allow_auto_header_text=not header_text_color_overridden,

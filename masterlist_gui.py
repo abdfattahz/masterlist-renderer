@@ -4,17 +4,23 @@ import queue
 import threading
 import subprocess
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, colorchooser
 
 from render_masterlist import parse_rgb, run_render_process
+
+
+DEFAULT_ROW_A_COLOR = "243,166,166"
+DEFAULT_ROW_B_COLOR = "232,126,126"
+DEFAULT_HEADER_BG_COLOR = "180,40,40"
+DEFAULT_BORDER_COLOR = "20,0,0"
 
 
 class MasterlistGuiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Masterlist Renderer")
-        self.root.geometry("760x620")
-        self.root.minsize(700, 560)
+        self.root.geometry("760x700")
+        self.root.minsize(700, 640)
 
         self.events = queue.Queue()
         self.is_running = False
@@ -31,6 +37,10 @@ class MasterlistGuiApp:
         self.header_font_size_var = tk.StringVar(value="18")
         self.text_color_var = tk.StringVar(value="20,0,0")
         self.header_text_color_var = tk.StringVar(value="255,255,255")
+        self.row_a_color_var = tk.StringVar(value=DEFAULT_ROW_A_COLOR)
+        self.row_b_color_var = tk.StringVar(value=DEFAULT_ROW_B_COLOR)
+        self.header_bg_color_var = tk.StringVar(value=DEFAULT_HEADER_BG_COLOR)
+        self.border_color_var = tk.StringVar(value=DEFAULT_BORDER_COLOR)
         self.match_table_to_bg_var = tk.BooleanVar(value=False)
 
         self.status_var = tk.StringVar(value="Ready.")
@@ -106,6 +116,44 @@ class MasterlistGuiApp:
             variable=self.match_table_to_bg_var,
         ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(8, 0))
 
+        ttk.Label(
+            advanced,
+            text="When both are used, custom table colors below take priority.",
+        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
+
+        table_colors = ttk.LabelFrame(main, text="Table Colors", padding=12)
+        table_colors.pack(fill="x", pady=(12, 0))
+        table_colors.columnconfigure(1, weight=1)
+
+        self._color_field(
+            parent=table_colors,
+            row=0,
+            label="Row A background",
+            variable=self.row_a_color_var,
+            picker_title="Choose Row A background color",
+        )
+        self._color_field(
+            parent=table_colors,
+            row=1,
+            label="Row B background",
+            variable=self.row_b_color_var,
+            picker_title="Choose Row B background color",
+        )
+        self._color_field(
+            parent=table_colors,
+            row=2,
+            label="Header background",
+            variable=self.header_bg_color_var,
+            picker_title="Choose Header background color",
+        )
+        self._color_field(
+            parent=table_colors,
+            row=3,
+            label="Border color",
+            variable=self.border_color_var,
+            picker_title="Choose Border color",
+        )
+
         actions = ttk.Frame(main)
         actions.pack(fill="x", pady=(12, 0))
 
@@ -131,6 +179,36 @@ class MasterlistGuiApp:
         ttk.Button(parent, text="Browse", command=browse_callback).grid(
             row=row, column=2, pady=4
         )
+
+    def _color_field(self, parent, row, label, variable, picker_title):
+        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Entry(parent, textvariable=variable).grid(
+            row=row, column=1, sticky="ew", padx=(8, 8), pady=4
+        )
+        ttk.Button(
+            parent,
+            text="Pick",
+            command=lambda v=variable, t=picker_title: self._pick_color(v, t),
+        ).grid(row=row, column=2, pady=4)
+
+    def _pick_color(self, variable, title):
+        initial_hex = None
+        try:
+            initial_hex = self._rgb_to_hex(parse_rgb(variable.get().strip()))
+        except Exception:
+            pass
+
+        rgb_tuple, _ = colorchooser.askcolor(color=initial_hex, title=title)
+        if rgb_tuple is None:
+            return
+
+        r, g, b = (int(round(v)) for v in rgb_tuple)
+        variable.set(f"{r},{g},{b}")
+
+    @staticmethod
+    def _rgb_to_hex(rgb):
+        r, g, b = rgb
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def _browse_excel(self):
         path = filedialog.askopenfilename(
@@ -207,9 +285,37 @@ class MasterlistGuiApp:
 
         text_color = self.text_color_var.get().strip()
         header_text_color = self.header_text_color_var.get().strip()
+        row_a_color = self.row_a_color_var.get().strip()
+        row_b_color = self.row_b_color_var.get().strip()
+        header_bg_color = self.header_bg_color_var.get().strip()
+        border_color = self.border_color_var.get().strip()
 
         parse_rgb(text_color)
         parse_rgb(header_text_color)
+        row_a_color_tuple = parse_rgb(row_a_color)
+        row_b_color_tuple = parse_rgb(row_b_color)
+        header_bg_color_tuple = parse_rgb(header_bg_color)
+        border_color_tuple = parse_rgb(border_color)
+
+        default_row_a_tuple = parse_rgb(DEFAULT_ROW_A_COLOR)
+        default_row_b_tuple = parse_rgb(DEFAULT_ROW_B_COLOR)
+        default_header_bg_tuple = parse_rgb(DEFAULT_HEADER_BG_COLOR)
+        default_border_tuple = parse_rgb(DEFAULT_BORDER_COLOR)
+
+        custom_row_a_color = (
+            row_a_color if row_a_color_tuple != default_row_a_tuple else None
+        )
+        custom_row_b_color = (
+            row_b_color if row_b_color_tuple != default_row_b_tuple else None
+        )
+        custom_header_bg_color = (
+            header_bg_color
+            if header_bg_color_tuple != default_header_bg_tuple
+            else None
+        )
+        custom_border_color = (
+            border_color if border_color_tuple != default_border_tuple else None
+        )
 
         return {
             "excel_path": excel_path,
@@ -223,6 +329,10 @@ class MasterlistGuiApp:
             "header_font_size": header_font_size,
             "text_color": text_color,
             "header_text_color": header_text_color,
+            "row_a_color": custom_row_a_color,
+            "row_b_color": custom_row_b_color,
+            "header_bg_color": custom_header_bg_color,
+            "border_color": custom_border_color,
             "match_table_to_bg": self.match_table_to_bg_var.get(),
         }
 
@@ -265,6 +375,10 @@ class MasterlistGuiApp:
                 header_font_size=options["header_font_size"],
                 text_color=options["text_color"],
                 header_text_color=options["header_text_color"],
+                row_a_color=options["row_a_color"],
+                row_b_color=options["row_b_color"],
+                header_bg_color=options["header_bg_color"],
+                border_color=options["border_color"],
                 match_table_to_bg=options["match_table_to_bg"],
                 progress_callback=on_progress,
             )

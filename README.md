@@ -27,6 +27,8 @@ python masterlist_gui.py
    - Pick the Excel file (`.xlsx` / `.xls`)
    - Choose output folder
    - Optionally choose background image and font
+   - Optionally set custom table colors (Row A, Row B, Header, Border)
+   - If auto-match and custom table colors are both set, custom colors win
    - Click **Generate PNG Pages**
 
 ## Windows EXE Build
